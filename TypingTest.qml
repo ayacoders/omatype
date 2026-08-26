@@ -37,11 +37,13 @@ Item {
   property bool wordsLoadAttempted: false
   readonly property bool wordsFailed: root.wordsLoadAttempted && root.wordPool.length === 0
 
-  property var words: []
-  // Append-only copy of the full sequence. `words` gets trimmed from the
-  // front as lines complete, so it stops being the whole test partway
-  // through; this is what restartSame() replays.
+  // originalWords is the canonical sequence for this test and only ever
+  // grows; `words` is the window of it currently mounted, trimmed from the
+  // front as lines complete. mountedCount tracks how far into the sequence
+  // that window reaches, so a replay re-mounts the same continuation.
   property var originalWords: []
+  property var words: []
+  property int mountedCount: 0
   property var submittedWords: [] // index-aligned with words; length == currentWordIndex
   property int currentWordIndex: 0
   property string currentInput: ""
@@ -148,17 +150,36 @@ Item {
   }
 
   function newTest() {
-    root.words = root.wordPool.length > 0 ? TypingTestModel.pickWords(root.wordPool, root.targetWordCount()) : []
-    root.originalWords = root.words.slice()
-    root.resetRunState()
+    root.originalWords = TypingTestModel.pickWords(root.wordPool, root.targetWordCount())
+    root.startSequence()
   }
 
   // Retypes the same words instead of drawing a fresh set, for comparing
   // runs over identical text.
   function restartSame() {
     if (root.originalWords.length === 0) { root.newTest(); return }
-    root.words = root.originalWords.slice()
+    root.startSequence()
+  }
+
+  // Clears the run and mounts the opening window of originalWords.
+  function startSequence() {
+    root.words = []
+    root.mountedCount = 0
     root.resetRunState()
+    root.mountNext(root.targetWordCount())
+  }
+
+  // Appends the next `count` words of the sequence to the mounted window,
+  // extending the sequence with fresh picks only once it runs out. Replays
+  // therefore follow the original words rather than diverging into new ones.
+  function mountNext(count) {
+    var shortfall = root.mountedCount + count - root.originalWords.length
+    if (shortfall > 0)
+      root.originalWords = root.originalWords.concat(TypingTestModel.pickWords(root.wordPool, shortfall))
+
+    var next = root.originalWords.slice(root.mountedCount, root.mountedCount + count)
+    root.mountedCount += next.length
+    root.words = root.words.concat(next)
   }
 
   function setMode(mode) {
@@ -195,18 +216,17 @@ Item {
     else root.setWordsOption(next)
   }
 
-  // Keeps a bounded window mounted: top up ahead of the cursor so the
-  // renderer never runs dry.
+  // Keeps a bounded window mounted: roughly the visible lines plus enough
+  // ahead of the cursor that the renderer never runs dry. Topping up in
+  // small chunks keeps the mounted count near this figure instead of
+  // overshooting it by a wide margin.
   readonly property int wordsAheadBuffer: 40
+  readonly property int wordsTopUpChunk: 20
 
   function ensureBuffer() {
     if (root.testMode !== "time") return
     if (root.words.length - root.currentWordIndex >= root.wordsAheadBuffer) return
-
-    var extra = TypingTestModel.pickWords(root.wordPool, 60)
-    root.words = root.words.concat(extra)
-    // Kept in sync so restartSame() can replay a run long enough to top up.
-    root.originalWords = root.originalWords.concat(extra)
+    root.mountNext(root.wordsTopUpChunk)
   }
 
   // Drops the top line in one batch once the cursor is two lines past it.
