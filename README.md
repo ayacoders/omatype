@@ -6,66 +6,110 @@ shell overlay. No network calls — the word list is bundled at
 
 ![Omatype demo](demo.gif)
 
-## Usage
+## Requirements
 
-- Summon: `omarchy-shell shell toggle aya.omatype` (bound to
-  `SUPER SHIFT CTRL + T`, see below)
-- Fully keyboard-driven, no mouse required: **Up/Down** swap the time/words
-  mode tab, **Left/Right** step the duration or word-count option — or click
-  the chips instead. Disabled mid-run either way.
-- Start typing to begin. **Space** submits the current word. **Backspace**
-  edits within the current word, and steps back into the previous one once
-  you're at the start of the current word (reaches back one full line —
-  see Known limitations). **Ctrl+Backspace** erases the whole current word
-  in one go instead of one character at a time (and the whole previous word
-  if pressed again right at the start of a word). Mistyping into a word
-  stops accepting more characters 10 past its correct length.
-- **Tab** restarts with a fresh, random word set. **Shift+Tab** restarts
-  with the *same* words you just typed, for comparing your speed on
-  identical text. **Esc** aborts a running test back to idle, or closes the
-  overlay when idle/done.
-- Results screen shows net WPM (correct chars only), raw WPM (everything
-  typed), accuracy, consistency (how even your pace was, not just its
-  average — see `TypingTestModel.computeConsistency()`), and elapsed time.
+> **This is an Omarchy plugin, not a standalone app.** It runs *inside*
+> `omarchy-shell` (the Quattro Quickshell-based shell) as an `overlay`
+> plugin — there is no separate binary and nothing to launch on its own.
 
-## Keybinding
+You need:
 
-In `~/.config/hypr/bindings.lua`:
+- [Omarchy](https://omarchy.org) with `omarchy-shell` running (Linux +
+  Hyprland/Wayland)
+- The `omarchy plugin` CLI (ships with Omarchy)
 
-```lua
-o.bind("SUPER SHIFT CTRL + T", "Omatype", "omarchy-shell shell toggle aya.omatype")
+It will not run on macOS or Windows, on a plain Hyprland setup without
+Omarchy, or under a different desktop/shell.
+
+## Install
+
+```bash
+omarchy plugin add https://github.com/ayacoders/omatype.git --enable --yes
 ```
 
-## Known limitations (v1)
+Then bind a key by adding this to `~/.config/hypr/bindings.lua`:
 
-- No persistence — results aren't saved between runs.
-- Backspace only reaches back as far as the rolling render window keeps
-  (one full completed line) — see `trimCompletedLine()` in `TypingTest.qml`.
-- One word list (`english_1k`, MonkeyType's 1000 most common English words).
+```lua
+o.bind("SUPER + SHIFT + CTRL + T", "Omatype", "omarchy-shell shell toggle aya.omatype")
+```
+
+Reload Hyprland (`hyprctl reload`) and press **Super+Shift+Ctrl+T**.
+
+> Plugins run as unsandboxed code inside `omarchy-shell`. Review the source
+> before enabling anything — this one is ~1k lines of QML/JS plus a bundled
+> word list, and makes no network calls.
+
+To update or remove later:
+
+```bash
+omarchy plugin update aya.omatype
+omarchy plugin remove aya.omatype
+```
+
+## Usage
+
+- Toggle any time with your keybinding, or
+  `omarchy-shell shell toggle aya.omatype`.
+- Fully keyboard-driven: **↑ ↓** switch between time/words mode, **← →**
+  change the duration or word count — or click the chips. Both are locked
+  mid-run.
+- Start typing to begin. **Space** submits a word. **Backspace** edits the
+  current word and steps back into the previous one when you're at its
+  start; **Ctrl+Backspace** clears a whole word at once. Overtyping a word
+  stops 10 characters past its length.
+- **Tab** restarts with fresh words, **Shift+Tab** replays the *same* words
+  so you can compare runs over identical text, **Esc** aborts a run (or
+  closes the overlay when idle).
+- Results show net WPM, raw WPM, accuracy, consistency (how *even* your pace
+  was, not how fast), and elapsed time.
 
 ## Files
 
-- `TypingTest.qml` — all state and test logic; composes the rest
-- `WordItem.qml` — one word: character coloring, caret
-- `WordStream.qml` — the centered, line-wrapped word viewport
-- `ConfigBar.qml` — mode/duration/word-count chips
-- `ResultsScreen.qml` — end-of-run stats
-- `TypingTestModel.js` — pure logic: word picking, line wrapping, scoring
+| File | Role |
+| --- | --- |
+| `TypingTest.qml` | All state and test logic; composes the rest |
+| `WordStream.qml` | Line-wrapped, centered word viewport |
+| `WordItem.qml` | One word: character coloring and caret |
+| `ConfigBar.qml` | Mode/duration/word-count chips |
+| `ResultsScreen.qml` | End-of-run stats |
+| `TypingTestModel.js` | Pure logic: word picking, line wrapping, scoring |
 
-## Dev loop
+## Development
+
+Clone into the plugin directory so the shell picks it up:
 
 ```bash
-omarchy plugin validate "$HOME/.config/omarchy/plugins/aya.omatype"
-for f in "$HOME"/.config/omarchy/plugins/aya.omatype/*.qml; do
-  qmllint -I "$OMARCHY_PATH/shell" "$f"
-done
+git clone https://github.com/ayacoders/omatype.git \
+  ~/.config/omarchy/plugins/aya.omatype
 omarchy-shell shell rescanPlugins
 omarchy plugin enable aya.omatype
+```
+
+Check and drive it:
+
+```bash
+omarchy plugin validate ~/.config/omarchy/plugins/aya.omatype
+for f in ~/.config/omarchy/plugins/aya.omatype/*.qml; do
+  qmllint -I "$OMARCHY_PATH/shell" "$f"
+done
+
 omarchy-shell shell summon aya.omatype '{}'
+omarchy-shell shell call aya.omatype setMode words
 omarchy-shell shell hide aya.omatype
 ```
 
-Saving any file under the plugin directory hot-reloads it — except an
-already-open (`keepLoaded: true`) instance doesn't pick up the change until
-its next full mount; run `omarchy-restart-shell` if edits don't seem to
-take effect.
+Saving a file hot-reloads it, but an already-open overlay keeps the old code
+until it next mounts (`keepLoaded: true`) — run `omarchy-restart-shell` if a
+change doesn't seem to land.
+
+## Known limitations
+
+- Results aren't saved between runs.
+- Backspace only reaches back as far as the rolling render window keeps —
+  about one completed line (see `trimCompletedLine()`).
+- One word list: `english_1k`, MonkeyType's 1000 most common English words.
+
+## License
+
+MIT for the plugin code (see `LICENSE`). The bundled word list is
+GPL-3.0 from MonkeyType — see `ATTRIBUTION.md`.
