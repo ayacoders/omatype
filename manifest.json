@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "aya.omatype",
+  "name": "Omatype",
+  "version": "1.0.0",
+  "author": "Aya",
+  "license": "MIT",
+  "description": "Local, offline MonkeyType-style typing speed test overlay",
+  "kinds": ["overlay"],
+  "keepLoaded": true,
+  "entryPoints": { "overlay": "TypingTest.qml" }
+}
