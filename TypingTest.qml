@@ -16,6 +16,7 @@ Item {
   id: root
 
   property string pluginDir: Quickshell.env("HOME") + "/.config/omarchy/plugins/aya.omatype"
+  readonly property string wordsPath: root.pluginDir + "/words/english_1k.json"
   property var shell: null
   property var manifest: null
 
@@ -31,6 +32,11 @@ Item {
   readonly property var wordsOptions: [10, 25, 50, 100]
 
   property var wordPool: []
+  // Set once a load has been tried, so the notice below doesn't flash while
+  // the file is still being read.
+  property bool wordsLoadAttempted: false
+  readonly property bool wordsFailed: root.wordsLoadAttempted && root.wordPool.length === 0
+
   property var words: []
   // Append-only copy of the full sequence. `words` gets trimmed from the
   // front as lines complete, so it stops being the whole test partway
@@ -113,6 +119,7 @@ Item {
 
   function loadWords(raw) {
     root.wordPool = TypingTestModel.parseWordList(raw)
+    root.wordsLoadAttempted = true
     if (root.opened) root.newTest()
   }
 
@@ -372,9 +379,12 @@ Item {
     }
   }
 
+  // A failed read routes through loadWords too, so an unreadable file and a
+  // malformed one land in the same empty-pool state.
   FileView {
-    path: root.pluginDir + "/words/english_1k.json"
+    path: root.wordsPath
     onLoaded: root.loadWords(text())
+    onLoadFailed: root.loadWords("")
   }
 
   PanelWindow {
@@ -505,8 +515,21 @@ Item {
             Behavior on opacity { NumberAnimation { duration: 150 } }
           }
 
+          // Without this the overlay would just sit blank and swallow every
+          // keystroke, with nothing to say the word list is missing.
+          Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            visible: root.wordsFailed
+            text: "Couldn't read the word list.\n" + root.wordsPath
+            horizontalAlignment: Text.AlignHCenter
+            color: root.incorrectColor
+            font.family: root.monoFontFamily
+            font.pixelSize: Style.font.body
+          }
+
           WordStream {
             id: wordStream
+            visible: !root.wordsFailed
             width: contentArea.width
             height: root.wordAreaHeight
             words: root.words
