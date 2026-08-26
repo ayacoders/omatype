@@ -4,6 +4,8 @@ A local, offline MonkeyType-style typing speed test, running as an Omarchy
 shell overlay. No network calls — the word list is bundled at
 `words/english_1k.json` (see `ATTRIBUTION.md`).
 
+![Omatype demo](demo.gif)
+
 ## Usage
 
 - Summon: `omarchy-shell shell toggle aya.omatype` (bound to
