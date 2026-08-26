@@ -248,25 +248,26 @@ Item {
     testTimer.start()
   }
 
+  // Caps how far a word can be over-typed with wrong characters — without
+  // this, mashing keys against a word you're stuck on grows `currentInput`
+  // (and the "extra" characters rendered after it) without bound.
+  readonly property int maxExtraChars: 10
+
   function typeChar(ch) {
     if (root.phase === "done" || root.wordPool.length === 0) return
     root.beginIfIdle()
+    var target = root.words[root.currentWordIndex] || ""
+    if (root.currentInput.length >= target.length + root.maxExtraChars) return
     root.currentInput += ch
   }
 
-  function backspace() {
-    if (root.phase !== "running") return
-
-    if (root.currentInput.length > 0) {
-      root.currentInput = root.currentInput.slice(0, -1)
-      return
-    }
-
-    // At the start of the current word with nothing left to delete — step
-    // back and re-open the previous one, un-tallying it so it's scored
-    // fresh once resubmitted. Only reaches as far back as the rolling
-    // buffer's trimmed history (see trimCompletedLine()).
-    if (root.currentWordIndex === 0) return
+  // Un-tallies and steps back into the previous word. Shared by backspace()
+  // (which then restores what was typed there) and backspaceWord() (which
+  // wipes it instead). Returns the word's previously-typed text, or null if
+  // there's no previous word to step into (start of the rolling
+  // buffer/test — see trimCompletedLine()).
+  function stepIntoPreviousWord() {
+    if (root.currentWordIndex === 0) return null
 
     var idx = root.currentWordIndex - 1
     var typed = root.submittedWords[idx] || ""
@@ -277,7 +278,35 @@ Item {
 
     root.submittedWords = root.submittedWords.slice(0, idx)
     root.currentWordIndex = idx
-    root.currentInput = typed
+    return typed
+  }
+
+  function backspace() {
+    if (root.phase !== "running") return
+
+    if (root.currentInput.length > 0) {
+      root.currentInput = root.currentInput.slice(0, -1)
+      return
+    }
+
+    var typed = root.stepIntoPreviousWord()
+    if (typed !== null) root.currentInput = typed
+  }
+
+  // Ctrl+Backspace: erases the whole current word's input in one go, like a
+  // text editor's delete-previous-word. At the start of a word (nothing
+  // left to erase there), steps back and erases the previous word entirely
+  // too, rather than restoring it the way plain Backspace does.
+  function backspaceWord() {
+    if (root.phase !== "running") return
+
+    if (root.currentInput.length > 0) {
+      root.currentInput = ""
+      return
+    }
+
+    root.stepIntoPreviousWord()
+    root.currentInput = ""
   }
 
   function submitWord() {
@@ -424,7 +453,8 @@ Item {
             else root.newTest()
             event.accepted = true
           } else if (event.key === Qt.Key_Backspace) {
-            root.backspace()
+            if (event.modifiers & Qt.ControlModifier) root.backspaceWord()
+            else root.backspace()
             event.accepted = true
           } else if (event.key === Qt.Key_Space) {
             root.submitWord()

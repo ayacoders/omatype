@@ -14,7 +14,10 @@ shell overlay. No network calls — the word list is bundled at
 - Start typing to begin. **Space** submits the current word. **Backspace**
   edits within the current word, and steps back into the previous one once
   you're at the start of the current word (reaches back one full line —
-  see Known limitations).
+  see Known limitations). **Ctrl+Backspace** erases the whole current word
+  in one go instead of one character at a time (and the whole previous word
+  if pressed again right at the start of a word). Mistyping into a word
+  stops accepting more characters 10 past its correct length.
 - **Tab** restarts with a fresh, random word set. **Shift+Tab** restarts
   with the *same* words you just typed, for comparing your speed on
   identical text. **Esc** aborts a running test back to idle, or closes the
