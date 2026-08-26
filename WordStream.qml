@@ -82,29 +82,67 @@ Flickable {
       id: lineRepeater
       model: root.lines
 
-      delegate: Row {
-        id: lineRow
+      // One caret per line rather than per word, so it glides along the line
+      // as words are submitted instead of restarting inside each word. It
+      // also rides the line's move transition when a completed line is
+      // trimmed away.
+      delegate: Item {
+        id: lineItem
         required property var modelData
 
-        anchors.horizontalCenter: parent.horizontalCenter
-        spacing: root.wordSpacing
-
-        Repeater {
-          model: lineRow.modelData
-
-          delegate: WordItem {
-            required property int modelData
-            word: root.words[modelData] || ""
-            typed: root.typedFor(modelData)
-            isCurrent: modelData === root.currentWordIndex && !root.isDone
-
-            fontFamily: root.fontFamily
-            fontSize: root.fontSize
-            correctColor: root.correctColor
-            incorrectColor: root.incorrectColor
-            pendingColor: root.pendingColor
-            caretColor: root.caretColor
+        // Rendered width of each word on this line, which grows as a word is
+        // overtyped — the caret offset has to match what's on screen.
+        readonly property var charCounts: {
+          var counts = []
+          for (var i = 0; i < lineItem.modelData.length; i++) {
+            var index = lineItem.modelData[i]
+            var word = root.words[index] || ""
+            counts.push(Math.max(word.length, root.typedFor(index).length))
           }
+          return counts
+        }
+
+        readonly property int cursorPosition: lineItem.modelData.indexOf(root.currentWordIndex)
+        readonly property bool hasCursor: cursorPosition !== -1 && !root.isDone
+
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: wordsRow.width
+        height: wordsRow.height
+
+        Row {
+          id: wordsRow
+          spacing: root.wordSpacing
+
+          Repeater {
+            model: lineItem.modelData
+
+            delegate: WordItem {
+              required property int modelData
+              word: root.words[modelData] || ""
+              typed: root.typedFor(modelData)
+
+              fontFamily: root.fontFamily
+              fontSize: root.fontSize
+              correctColor: root.correctColor
+              incorrectColor: root.incorrectColor
+              pendingColor: root.pendingColor
+            }
+          }
+        }
+
+        Rectangle {
+          visible: lineItem.hasCursor
+          width: Math.max(2, Style.space(3))
+          height: wordsRow.height
+          radius: width / 2
+          color: root.caretColor
+
+          x: lineItem.hasCursor
+            ? TypingTestModel.caretOffset(lineItem.charCounts, lineItem.cursorPosition,
+                root.currentInput.length, fontMetrics.advanceWidth("0"), root.wordSpacing)
+            : 0
+
+          Behavior on x { NumberAnimation { duration: 90; easing.type: Easing.OutCubic } }
         }
       }
     }

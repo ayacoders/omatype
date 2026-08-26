@@ -63,6 +63,19 @@ function computeLines(words, charWidth, spaceWidth, availableWidth) {
   return lines
 }
 
+// Where the caret sits along its line, in pixels from the line's left edge.
+// charCounts holds the rendered character count of each word on that line —
+// a word gets wider as it's overtyped, so this tracks what's on screen
+// rather than the target words. Monospace, so every character advances by
+// charWidth.
+function caretOffset(charCounts, indexInLine, caretChars, charWidth, spaceWidth) {
+  var x = 0
+  for (var i = 0; i < indexInLine && i < charCounts.length; i++) {
+    x += charCounts[i] * charWidth + spaceWidth
+  }
+  return x + caretChars * charWidth
+}
+
 // Standard scoring: a "word" is 5 characters. `wpm` counts only correct
 // characters, `rawWpm` counts everything typed.
 function computeStats(correctChars, incorrectChars, seconds) {

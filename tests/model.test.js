@@ -16,7 +16,10 @@ const path = require("node:path")
 const source = fs.readFileSync(path.join(__dirname, "..", "TypingTestModel.js"), "utf8")
 const model = new Function(`
   ${source}
-  return { parseWordList, pickWords, tallyWord, computeLines, computeStats, computeConsistency }
+  return {
+    parseWordList, pickWords, tallyWord, computeLines,
+    caretOffset, computeStats, computeConsistency
+  }
 `)()
 
 test("parseWordList reads the bundled list shape", () => {
@@ -113,6 +116,31 @@ test("computeLines puts an over-long word on its own line rather than looping", 
 
 test("computeLines handles no words", () => {
   assert.deepEqual(model.computeLines([], 10, 5, 100), [])
+})
+
+test("caretOffset starts at the line's left edge", () => {
+  assert.equal(model.caretOffset([5, 3], 0, 0, 10, 5), 0)
+  assert.equal(model.caretOffset([], 0, 0, 10, 5), 0)
+})
+
+test("caretOffset advances within a word", () => {
+  assert.equal(model.caretOffset([5, 3], 0, 3, 10, 5), 30)
+})
+
+test("caretOffset skips preceding words and their separators", () => {
+  // 5 chars (50px) + one 5px space, then 2 chars into the second word.
+  assert.equal(model.caretOffset([5, 3], 1, 2, 10, 5), 75)
+  // Two words behind: 50 + 5 + 30 + 5 = 90.
+  assert.equal(model.caretOffset([5, 3, 4], 2, 0, 10, 5), 90)
+})
+
+test("caretOffset accounts for overtyped words being wider", () => {
+  // The first word rendered 8 characters even though its target was shorter.
+  assert.equal(model.caretOffset([8, 3], 1, 0, 10, 5), 85)
+})
+
+test("caretOffset lands past the last character when a word is complete", () => {
+  assert.equal(model.caretOffset([5], 0, 5, 10, 5), 50)
 })
 
 test("computeStats uses the standard 5-characters-per-word convention", () => {
