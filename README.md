@@ -12,11 +12,16 @@ shell overlay. No network calls — the word list is bundled at
   mode tab, **Left/Right** step the duration or word-count option — or click
   the chips instead. Disabled mid-run either way.
 - Start typing to begin. **Space** submits the current word. **Backspace**
-  edits within the current word (can't step back into a previous word yet).
-- **Tab** restarts with a fresh word set at any point. **Esc** aborts a
-  running test back to idle, or closes the overlay when idle/done.
+  edits within the current word, and steps back into the previous one once
+  you're at the start of the current word (reaches back one full line —
+  see Known limitations).
+- **Tab** restarts with a fresh, random word set. **Shift+Tab** restarts
+  with the *same* words you just typed, for comparing your speed on
+  identical text. **Esc** aborts a running test back to idle, or closes the
+  overlay when idle/done.
 - Results screen shows net WPM (correct chars only), raw WPM (everything
-  typed), accuracy, and elapsed time.
+  typed), accuracy, consistency (how even your pace was, not just its
+  average — see `TypingTestModel.computeConsistency()`), and elapsed time.
 
 ## Keybinding
 
@@ -29,18 +34,33 @@ o.bind("SUPER SHIFT CTRL + T", "Omatype", "omarchy-shell shell toggle aya.omatyp
 ## Known limitations (v1)
 
 - No persistence — results aren't saved between runs.
-- Backspace can't cross back into a previously submitted word.
+- Backspace only reaches back as far as the rolling render window keeps
+  (one full completed line) — see `trimCompletedLine()` in `TypingTest.qml`.
 - One word list (`english_1k`, MonkeyType's 1000 most common English words).
+
+## Files
+
+- `TypingTest.qml` — all state and test logic; composes the rest
+- `WordItem.qml` — one word: character coloring, caret
+- `WordStream.qml` — the centered, line-wrapped word viewport
+- `ConfigBar.qml` — mode/duration/word-count chips
+- `ResultsScreen.qml` — end-of-run stats
+- `TypingTestModel.js` — pure logic: word picking, line wrapping, scoring
 
 ## Dev loop
 
 ```bash
 omarchy plugin validate "$HOME/.config/omarchy/plugins/aya.omatype"
-qmllint -I "$OMARCHY_PATH/shell" "$HOME/.config/omarchy/plugins/aya.omatype/TypingTest.qml"
+for f in "$HOME"/.config/omarchy/plugins/aya.omatype/*.qml; do
+  qmllint -I "$OMARCHY_PATH/shell" "$f"
+done
 omarchy-shell shell rescanPlugins
 omarchy plugin enable aya.omatype
 omarchy-shell shell summon aya.omatype '{}'
 omarchy-shell shell hide aya.omatype
 ```
 
-Saving any file under the plugin directory hot-reloads it automatically.
+Saving any file under the plugin directory hot-reloads it — except an
+already-open (`keepLoaded: true`) instance doesn't pick up the change until
+its next full mount; run `omarchy-restart-shell` if edits don't seem to
+take effect.

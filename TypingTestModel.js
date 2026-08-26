@@ -82,3 +82,24 @@ function computeStats(correctChars, incorrectChars, seconds) {
   var accuracy = totalChars > 0 ? (correctChars / totalChars) * 100 : 0
   return { wpm: wpm, rawWpm: rawWpm, accuracy: accuracy }
 }
+
+// Rough approximation of MonkeyType's consistency stat: how *even* the
+// typing speed was across the run, not just its average. Takes once-a-
+// second raw-WPM samples (see TypingTest.qml's sampleWpm()) and expresses
+// their spread as 100 minus the coefficient of variation (stddev / mean)
+// as a percentage — a smooth, unwavering pace scores near 100; one that
+// swings wildly between bursts and pauses scores low. Too few samples
+// (a very short run) to say anything meaningful reads as 100 rather than
+// a misleadingly harsh number.
+function computeConsistency(samples) {
+  if (!samples || samples.length < 2) return 100
+
+  var mean = samples.reduce(function(sum, v) { return sum + v }, 0) / samples.length
+  if (mean <= 0) return 100
+
+  var variance = samples.reduce(function(sum, v) { return sum + Math.pow(v - mean, 2) }, 0) / samples.length
+  var stddev = Math.sqrt(variance)
+  var coefficientOfVariation = stddev / mean
+
+  return Math.max(0, Math.min(100, 100 * (1 - coefficientOfVariation)))
+}

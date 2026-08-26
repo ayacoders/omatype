@@ -33,6 +33,11 @@ Item {
 
   property var wordPool: []
   property var words: []
+  // Full word sequence for this test, append-only — `words` above gets
+  // trimmed from the front as lines complete (see trimCompletedLine()), so
+  // it stops being "the whole test" partway through. This is what
+  // restartSame() replays.
+  property var originalWords: []
   property var submittedWords: [] // typed strings, index-aligned with words, length == currentWordIndex
   property int currentWordIndex: 0
   property string currentInput: ""
@@ -43,9 +48,16 @@ Item {
   property real remaining: 0
   property real startTimestamp: 0
 
+  // Once-a-second raw-WPM samples for the consistency stat — see
+  // TypingTestModel.computeConsistency().
+  property var wpmSamples: []
+  property int lastSampleSecond: 0
+  property int charsAtLastSample: 0
+
   property real resultWpm: 0
   property real resultRawWpm: 0
   property real resultAccuracy: 0
+  property real resultConsistency: 0
   property real resultTime: 0
 
   property color background: Color.menu.background
@@ -122,10 +134,11 @@ Item {
     return root.testMode === "time" ? root.wordsAheadBuffer : root.wordsOption
   }
 
-  function newTest() {
+  // Shared by newTest() and restartSame() — everything about a run except
+  // which words are in it.
+  function resetRunState() {
     testTimer.stop()
     root.phase = "idle"
-    root.words = root.wordPool.length > 0 ? TypingTestModel.pickWords(root.wordPool, root.targetWordCount()) : []
     root.submittedWords = []
     root.currentWordIndex = 0
     root.currentInput = ""
@@ -134,7 +147,25 @@ Item {
     root.elapsed = 0
     root.remaining = root.timeOption
     root.startTimestamp = 0
+    root.wpmSamples = []
+    root.lastSampleSecond = 0
+    root.charsAtLastSample = 0
     Qt.callLater(function() { wordStream.scrollToTop() })
+  }
+
+  function newTest() {
+    root.words = root.wordPool.length > 0 ? TypingTestModel.pickWords(root.wordPool, root.targetWordCount()) : []
+    root.originalWords = root.words.slice()
+    root.resetRunState()
+  }
+
+  // Retypes the exact same words as the run just finished (or the one in
+  // progress), instead of generating a fresh random set — useful for
+  // comparing your speed on identical text.
+  function restartSame() {
+    if (root.originalWords.length === 0) { root.newTest(); return }
+    root.words = root.originalWords.slice()
+    root.resetRunState()
   }
 
   function setMode(mode) {
@@ -179,8 +210,13 @@ Item {
 
   function ensureBuffer() {
     if (root.testMode !== "time") return
-    if (root.words.length - root.currentWordIndex < root.wordsAheadBuffer)
-      root.words = root.words.concat(TypingTestModel.pickWords(root.wordPool, 60))
+    if (root.words.length - root.currentWordIndex < root.wordsAheadBuffer) {
+      var extra = TypingTestModel.pickWords(root.wordPool, 60)
+      root.words = root.words.concat(extra)
+      // Keep in sync so restartSame() can still replay a run that ran long
+      // enough to need topping up.
+      root.originalWords = root.originalWords.concat(extra)
+    }
   }
 
   // Drops the top rendered line as a single batch once the cursor has
@@ -276,7 +312,29 @@ Item {
     }
   }
 
+  // Once-a-second raw-WPM samples, feeding the consistency stat — a rough
+  // measure (coefficient of variation, see TypingTestModel.computeConsistency())
+  // of how *even* the typing speed was, not just its average. Sampled off
+  // total characters typed so far, right or wrong and including the
+  // in-progress word, so it tracks cadence rather than accuracy.
+  function sampleWpm() {
+    var currentSecond = Math.floor(root.elapsed)
+    if (currentSecond <= root.lastSampleSecond) return
+
+    var totalChars = root.correctChars + root.incorrectChars + root.currentInput.length
+    var deltaChars = totalChars - root.charsAtLastSample
+    var deltaSeconds = currentSecond - root.lastSampleSecond
+    root.wpmSamples.push((deltaChars / 5) / (deltaSeconds / 60))
+    root.lastSampleSecond = currentSecond
+    root.charsAtLastSample = totalChars
+  }
+
   function finish() {
+    // Take the last sample before folding the in-progress word's characters
+    // into correctChars/incorrectChars below — sampleWpm() expects those to
+    // still exclude currentInput, same as every tick during the run.
+    root.sampleWpm()
+
     // Score whatever was left mid-word so a time-out doesn't drop it.
     if (root.currentInput.length > 0) {
       var target = root.words[root.currentWordIndex] || ""
@@ -294,6 +352,7 @@ Item {
     root.resultWpm = stats.wpm
     root.resultRawWpm = stats.rawWpm
     root.resultAccuracy = stats.accuracy
+    root.resultConsistency = TypingTestModel.computeConsistency(root.wpmSamples)
     root.resultTime = seconds
     root.phase = "done"
   }
@@ -304,6 +363,7 @@ Item {
     repeat: true
     onTriggered: {
       root.elapsed = (Date.now() - root.startTimestamp) / 1000
+      root.sampleWpm()
       if (root.testMode === "time") {
         root.remaining = Math.max(0, root.timeOption - root.elapsed)
         if (root.remaining <= 0) root.finish()
@@ -360,7 +420,8 @@ Item {
             else root.dismiss()
             event.accepted = true
           } else if (event.key === Qt.Key_Tab) {
-            root.newTest()
+            if (event.modifiers & Qt.ShiftModifier) root.restartSame()
+            else root.newTest()
             event.accepted = true
           } else if (event.key === Qt.Key_Backspace) {
             root.backspace()
@@ -470,6 +531,7 @@ Item {
           wpm: root.resultWpm
           accuracy: root.resultAccuracy
           rawWpm: root.resultRawWpm
+          consistency: root.resultConsistency
           correctChars: root.correctChars
           incorrectChars: root.incorrectChars
           time: root.resultTime
