@@ -1,12 +1,13 @@
 import QtQuick
 import qs.Commons
 
-// Mode + duration/word-count chip row. Purely presentational — it just
-// reflects the state it's given and signals intent back to the parent,
-// which owns setMode()/setTimeOption()/setWordsOption() (and their
-// mid-run no-ops). Also driven from the parent's Up/Down/Left/Right
-// keyboard handling, so every chip here has a keyboard equivalent too.
-Row {
+// Mode + duration/word-count chip row, plus a small keybinding legend for
+// it underneath. Purely presentational — it just reflects the state it's
+// given and signals intent back to the parent, which owns setMode()/
+// setTimeOption()/setWordsOption() (and their mid-run no-ops). Every chip
+// here has a keyboard equivalent too (the parent's Up/Down/Left/Right
+// handling) — the legend just makes that discoverable.
+Column {
   id: root
 
   required property string testMode
@@ -21,12 +22,14 @@ Row {
   property color border: "gray"
   property color selectedBg: "gray"
   property color accent: "white"
+  property color mutedText: Qt.rgba(1, 1, 1, 0.4)
   property int cornerRadius: 0
 
   signal modeSelected(string mode)
   signal timeSelected(int value)
   signal wordsSelected(int value)
 
+  spacing: Style.spacing.sm
   opacity: root.running ? 0.35 : 1
   enabled: !root.running
 
@@ -56,56 +59,69 @@ Row {
   }
 
   Row {
-    spacing: Style.spacing.lg
-    anchors.verticalCenter: parent.verticalCenter
+    anchors.horizontalCenter: parent.horizontalCenter
+    spacing: Style.spacing.huge
 
-    Repeater {
-      model: ["time", "words"]
-      delegate: Chip {
-        required property string modelData
-        label: modelData
-        selected: root.testMode === modelData
-        onActivated: root.modeSelected(modelData)
+    Row {
+      spacing: Style.spacing.lg
+      anchors.verticalCenter: parent.verticalCenter
+
+      Repeater {
+        model: ["time", "words"]
+        delegate: Chip {
+          required property string modelData
+          label: modelData
+          selected: root.testMode === modelData
+          onActivated: root.modeSelected(modelData)
+        }
+      }
+    }
+
+    Rectangle {
+      width: 1
+      height: Style.space(22)
+      color: root.border
+      anchors.verticalCenter: parent.verticalCenter
+    }
+
+    Row {
+      spacing: Style.spacing.lg
+      anchors.verticalCenter: parent.verticalCenter
+      visible: root.testMode === "time"
+
+      Repeater {
+        model: root.timeOptions
+        delegate: Chip {
+          required property int modelData
+          label: String(modelData)
+          selected: root.timeOption === modelData
+          onActivated: root.timeSelected(modelData)
+        }
+      }
+    }
+
+    Row {
+      spacing: Style.spacing.lg
+      anchors.verticalCenter: parent.verticalCenter
+      visible: root.testMode === "words"
+
+      Repeater {
+        model: root.wordsOptions
+        delegate: Chip {
+          required property int modelData
+          label: String(modelData)
+          selected: root.wordsOption === modelData
+          onActivated: root.wordsSelected(modelData)
+        }
       }
     }
   }
 
-  Rectangle {
-    width: 1
-    height: Style.space(22)
-    color: root.border
-    anchors.verticalCenter: parent.verticalCenter
-  }
-
-  Row {
-    spacing: Style.spacing.lg
-    anchors.verticalCenter: parent.verticalCenter
-    visible: root.testMode === "time"
-
-    Repeater {
-      model: root.timeOptions
-      delegate: Chip {
-        required property int modelData
-        label: String(modelData)
-        selected: root.timeOption === modelData
-        onActivated: root.timeSelected(modelData)
-      }
-    }
-  }
-
-  Row {
-    spacing: Style.spacing.lg
-    anchors.verticalCenter: parent.verticalCenter
-    visible: root.testMode === "words"
-
-    Repeater {
-      model: root.wordsOptions
-      delegate: Chip {
-        required property int modelData
-        label: String(modelData)
-        selected: root.wordsOption === modelData
-        onActivated: root.wordsSelected(modelData)
-      }
-    }
+  Text {
+    anchors.horizontalCenter: parent.horizontalCenter
+    text: "↑ ↓ switch mode  ·  ← → change option"
+    color: root.mutedText
+    font.family: root.fontFamily
+    font.pixelSize: Style.font.caption
   }
 }

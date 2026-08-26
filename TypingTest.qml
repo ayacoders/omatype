@@ -71,7 +71,6 @@ Item {
   property int contentMargin: Style.space(56)
   property int rowSpacing: Style.space(32)
   property int wordFontSize: Style.font.display
-  property int headerHeight: Style.space(44)
   // A narrower, centered reading column rather than a full-bleed card —
   // closer to MonkeyType's composed look than edge-to-edge text.
   property int cardWidth: Math.min(Style.space(1375), panel.width - Style.gapsOut * 4)
@@ -494,7 +493,6 @@ Item {
         ConfigBar {
           anchors.top: parent.top
           anchors.horizontalCenter: parent.horizontalCenter
-          height: root.headerHeight
           visible: root.phase !== "done"
           testMode: root.testMode
           timeOption: root.timeOption
@@ -506,6 +504,7 @@ Item {
           foreground: root.foreground
           border: root.border
           selectedBg: root.selectedChipBg
+          mutedText: root.pendingColor
           accent: Color.accent
           cornerRadius: root.cornerRadius
           onModeSelected: function(mode) { root.setMode(mode) }
