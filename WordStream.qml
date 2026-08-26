@@ -2,14 +2,10 @@ import QtQuick
 import qs.Commons
 import "TypingTestModel.js" as TypingTestModel
 
-// Fixed-height viewport onto the word list — MonkeyType-style: never
-// renders more than a few lines at once. Lines are computed up front
-// (computeLines(), monospace-width math) and rendered as individually
-// centered rows, poem-style, rather than one ragged left-aligned block.
-// Time mode keeps the model bounded by trimming a completed line out of
-// `words` entirely (see TypingTest.qml's trimCompletedLine(), which reads
-// `lines` below to know where that boundary falls); words mode has a fixed
-// total so it just scrolls instead.
+// Fixed-height viewport onto the word list, wrapped into individually
+// centered lines (poem-style) rather than one ragged left-aligned block.
+// Time mode stays bounded by trimming completed lines out of `words`
+// upstream; words mode has a fixed total and scrolls instead.
 Flickable {
   id: root
 
@@ -22,15 +18,14 @@ Flickable {
   property string fontFamily: "monospace"
   property int fontSize: 16
   property int lineSpacing: 8
-  property int wordSpacing: 16
+  property int wordSpacing: lineSpacing
   property color correctColor: "white"
   property color incorrectColor: "red"
   property color pendingColor: "gray"
   property color caretColor: "white"
 
-  // [[wordIndex, ...], ...] — recomputed whenever the word list or
-  // available width changes. Exposed so the parent's trimCompletedLine()
-  // can drop a whole line by index count alone, no layout geometry needed.
+  // [[wordIndex, ...], ...], contiguous and in order. Recomputed only when
+  // the word list or width changes — not per keystroke.
   readonly property var lines: TypingTestModel.computeLines(
     root.words, fontMetrics.advanceWidth("0"), root.wordSpacing, root.width)
 
@@ -53,20 +48,23 @@ Flickable {
 
   function scrollToTop() { contentY = 0 }
 
+  // Lines partition the word indices contiguously, so walking cumulative
+  // lengths finds the owning line without scanning each line's contents.
+  // -1 when the index is past the end.
   function lineIndexFor(wordIndex) {
+    var end = 0
     for (var i = 0; i < root.lines.length; i++) {
-      if (root.lines[i].indexOf(wordIndex) !== -1) return i
+      end += root.lines[i].length
+      if (wordIndex < end) return i
     }
     return -1
   }
 
-  // Words mode only: snaps straight to the current line's top the moment
-  // the cursor reaches it, so a finished line leaves the viewport as a
-  // whole instead of scrolling word-by-word.
+  // Words mode only: snaps to the current line's top as the cursor reaches
+  // it, so a finished line leaves the viewport whole.
   function ensureVisible(idx) {
     var item = lineRepeater.itemAt(root.lineIndexFor(idx))
-    if (!item) return
-    if (item.y !== contentY) contentY = item.y
+    if (item && item.y !== contentY) contentY = item.y
   }
 
   Column {
@@ -74,10 +72,8 @@ Flickable {
     width: root.width
     spacing: root.lineSpacing
 
-    // Time mode drops the completed line from `words` in one batch (see
-    // trimCompletedLine()) rather than scrolling past it — this is what
-    // actually animates that: remaining lines glide up into their new
-    // position instead of popping there.
+    // Time mode drops a completed line from the model rather than scrolling
+    // past it; this glides the survivors up instead of popping them.
     move: Transition {
       NumberAnimation { property: "y"; duration: 180; easing.type: Easing.OutCubic }
     }
@@ -89,11 +85,13 @@ Flickable {
       delegate: Row {
         id: lineRow
         required property var modelData
+
         anchors.horizontalCenter: parent.horizontalCenter
         spacing: root.wordSpacing
 
         Repeater {
           model: lineRow.modelData
+
           delegate: WordItem {
             required property int modelData
             word: root.words[modelData] || ""

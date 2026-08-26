@@ -1,9 +1,8 @@
-// TypingTestModel.js — pure helpers for the typing test overlay. No QML/UI
-// state; everything here is deterministic given its arguments, so it can be
-// reasoned about (and tested) independently of the shell.
+// Pure helpers for the typing test — no QML/UI state, deterministic given
+// their arguments.
 
-// Parses the bundled MonkeyType word-list JSON ({ words: [...] }). Returns
-// [] on any parse failure rather than throwing into the FileView's onLoaded.
+// Parses the bundled MonkeyType word-list JSON ({ words: [...] }). Returns []
+// on failure rather than throwing into FileView's onLoaded.
 function parseWordList(raw) {
   try {
     var data = JSON.parse(raw)
@@ -12,11 +11,11 @@ function parseWordList(raw) {
   return []
 }
 
-// Random words with no immediate repeat. `count` may exceed pool.length —
-// words repeat once the no-repeat window resets.
+// Random words with no immediate repeat. `count` may exceed pool.length.
 function pickWords(pool, count) {
   var out = []
   if (!pool || pool.length === 0) return out
+
   var lastIndex = -1
   for (var i = 0; i < count; i++) {
     var idx = Math.floor(Math.random() * pool.length)
@@ -27,28 +26,21 @@ function pickWords(pool, count) {
   return out
 }
 
-// Per-character correctness for one submitted/typed word against its
-// target. Characters typed past the target's length count as incorrect —
-// the caller renders those separately as "extra" characters.
+// Per-character correctness for one word. Anything typed past the target's
+// length is overtyped, so it counts as incorrect.
 function tallyWord(target, typed) {
   var correct = 0
-  var incorrect = 0
   for (var i = 0; i < typed.length; i++) {
     if (i < target.length && typed[i] === target[i]) correct++
-    else incorrect++
   }
-  return { correct: correct, incorrect: incorrect }
+  return { correct: correct, incorrect: typed.length - correct }
 }
 
-// Groups word indices into lines for a poem-style centered display, where
-// each line is centered independently rather than the whole block being
-// one ragged left-aligned paragraph. Assumes a monospace font, so a word's
-// width is just its character count times the font's fixed advance width —
-// no need to measure actual rendered glyphs. Recomputed only when the word
-// list (or available width) changes, not on every keystroke — it ignores
-// mid-typing "extra" overtyped characters, a rare case where a line's
-// balance can drift very slightly in exchange for not re-laying-out on
-// every keystroke.
+// Groups word indices into lines, each rendered centered on its own (see
+// WordStream.qml). Monospace-only: a word's width is its length times the
+// fixed advance width, so no glyph measuring is needed. Deliberately ignores
+// mid-typing overtyped characters — a line's balance can drift a hair, in
+// exchange for not re-wrapping on every keystroke.
 function computeLines(words, charWidth, spaceWidth, availableWidth) {
   var lines = []
   var current = []
@@ -71,35 +63,36 @@ function computeLines(words, charWidth, spaceWidth, availableWidth) {
   return lines
 }
 
-// Standard typing-test scoring: a "word" is 5 characters. `wpm` (net) counts
-// only correctly typed characters; `rawWpm` counts everything typed, right
-// or wrong. `accuracy` is correct / total typed, as a percentage.
+// Standard scoring: a "word" is 5 characters. `wpm` counts only correct
+// characters, `rawWpm` counts everything typed.
 function computeStats(correctChars, incorrectChars, seconds) {
   var minutes = Math.max(seconds, 0.001) / 60
   var totalChars = correctChars + incorrectChars
-  var rawWpm = (totalChars / 5) / minutes
-  var wpm = (correctChars / 5) / minutes
-  var accuracy = totalChars > 0 ? (correctChars / totalChars) * 100 : 0
-  return { wpm: wpm, rawWpm: rawWpm, accuracy: accuracy }
+  return {
+    wpm: (correctChars / 5) / minutes,
+    rawWpm: (totalChars / 5) / minutes,
+    accuracy: totalChars > 0 ? (correctChars / totalChars) * 100 : 0
+  }
 }
 
-// Rough approximation of MonkeyType's consistency stat: how *even* the
-// typing speed was across the run, not just its average. Takes once-a-
-// second raw-WPM samples (see TypingTest.qml's sampleWpm()) and expresses
-// their spread as 100 minus the coefficient of variation (stddev / mean)
-// as a percentage — a smooth, unwavering pace scores near 100; one that
-// swings wildly between bursts and pauses scores low. Too few samples
-// (a very short run) to say anything meaningful reads as 100 rather than
-// a misleadingly harsh number.
+// How *even* the pace was, not how fast: 100 minus the coefficient of
+// variation (stddev / mean) of the per-second WPM samples. Steady typing
+// scores near 100; bursts and pauses score low. Too few samples to say
+// anything reads as 100 rather than a misleadingly harsh number.
 function computeConsistency(samples) {
   if (!samples || samples.length < 2) return 100
 
-  var mean = samples.reduce(function(sum, v) { return sum + v }, 0) / samples.length
+  var sum = 0
+  for (var i = 0; i < samples.length; i++) sum += samples[i]
+  var mean = sum / samples.length
   if (mean <= 0) return 100
 
-  var variance = samples.reduce(function(sum, v) { return sum + Math.pow(v - mean, 2) }, 0) / samples.length
-  var stddev = Math.sqrt(variance)
-  var coefficientOfVariation = stddev / mean
+  var squaredDiffs = 0
+  for (var j = 0; j < samples.length; j++) {
+    var diff = samples[j] - mean
+    squaredDiffs += diff * diff
+  }
 
+  var coefficientOfVariation = Math.sqrt(squaredDiffs / samples.length) / mean
   return Math.max(0, Math.min(100, 100 * (1 - coefficientOfVariation)))
 }

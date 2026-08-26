@@ -1,11 +1,9 @@
 import QtQuick
 import qs.Commons
 
-// End-of-run stats, filling the whole (much taller) results card: the
-// numbers sit centered in the middle of it, and the restart/close hint is
-// pinned to the very bottom rather than crowding up under the stats.
-// Tab/Shift+Tab/Enter restart and Esc closes, but all of that is handled by
-// the parent's single key catcher, not here.
+// End-of-run stats filling the card: numbers centered, restart/close hint
+// pinned to the bottom. The keys it advertises are handled by the parent's
+// key catcher, not here.
 Item {
   id: root
 

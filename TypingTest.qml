@@ -6,13 +6,12 @@ import qs.Commons
 import qs.Ui
 import "TypingTestModel.js" as TypingTestModel
 
-// Local, offline typing speed test — MonkeyType's mechanics, run entirely
-// inside the shell process. Word list is bundled (see words/english_1k.json
-// and ATTRIBUTION.md); nothing here ever touches the network.
+// Local, offline typing speed test with MonkeyType's mechanics, run inside
+// the shell process. The word list is bundled (words/english_1k.json, see
+// ATTRIBUTION.md) — nothing here touches the network.
 //
-// This file owns all the state and logic; ConfigBar/WordStream/WordItem/
-// ResultsScreen are pure rendering — they take props and emit signals,
-// nothing here relies on them holding state of their own.
+// This file owns all state and logic; ConfigBar/WordStream/WordItem/
+// ResultsScreen are pure rendering driven by props and signals.
 Item {
   id: root
 
@@ -33,12 +32,11 @@ Item {
 
   property var wordPool: []
   property var words: []
-  // Full word sequence for this test, append-only — `words` above gets
-  // trimmed from the front as lines complete (see trimCompletedLine()), so
-  // it stops being "the whole test" partway through. This is what
-  // restartSame() replays.
+  // Append-only copy of the full sequence. `words` gets trimmed from the
+  // front as lines complete, so it stops being the whole test partway
+  // through; this is what restartSame() replays.
   property var originalWords: []
-  property var submittedWords: [] // typed strings, index-aligned with words, length == currentWordIndex
+  property var submittedWords: [] // index-aligned with words; length == currentWordIndex
   property int currentWordIndex: 0
   property string currentInput: ""
 
@@ -48,8 +46,7 @@ Item {
   property real remaining: 0
   property real startTimestamp: 0
 
-  // Once-a-second raw-WPM samples for the consistency stat — see
-  // TypingTestModel.computeConsistency().
+  // Per-second WPM samples feeding the consistency stat.
   property var wpmSamples: []
   property int lastSampleSecond: 0
   property int charsAtLastSample: 0
@@ -66,32 +63,24 @@ Item {
   property var borderSpec: Border.surfaceSpec("menu", "border", border, Math.max(1, Style.space(2)))
   property color scrim: Color.menu.scrim
   readonly property int cornerRadius: Style.cornerRadius
-  // A big, roomy typing surface, not a compact popup — generous padding
-  // throughout rather than the stock menu's tight metrics.
+  // Roomy typing surface rather than the stock menu's compact metrics.
   property int contentMargin: Style.space(56)
   property int rowSpacing: Style.space(32)
   property int wordFontSize: Style.font.display
-  // A narrower, centered reading column rather than a full-bleed card —
-  // closer to MonkeyType's composed look than edge-to-edge text.
   property int cardWidth: Math.min(Style.space(1375), panel.width - Style.gapsOut * 4)
-  // Word area is capped to a fixed number of visible lines (see
-  // wordAreaHeight below) — the actual word list is a bounded rolling
-  // window (see ensureBuffer()/trimCompletedLine()), it just also never
-  // renders more than this many lines tall.
+  // Caps the viewport at a few lines; the word list itself stays bounded via
+  // ensureBuffer()/trimCompletedLine().
   readonly property int visibleLines: 3
   readonly property int wordLineSpacing: Style.spacing.xxl
   readonly property int wordLineHeight: Math.round(root.wordFontSize * 1.5)
   readonly property int wordAreaHeight: root.visibleLines * root.wordLineHeight
     + (root.visibleLines - 1) * root.wordLineSpacing
-  // One tall, near-square card for every phase — the typing view centers
-  // its content in it the same way the results screen does, rather than
-  // sizing the card to hug three lines of words.
+  // One near-square card for every phase; each view centers itself in it.
   property int cardHeight: Math.min(Style.space(618), panel.height - Style.gapsOut * 4)
 
   readonly property color pendingColor: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.38)
   readonly property color correctColor: root.foreground
-  // Theme's error/danger token — same one polkit and the lock screen use
-  // for their own error states — not a hardcoded color.
+  // Theme's error token, as used by polkit and the lock screen.
   readonly property color incorrectColor: Color.urgent
   readonly property color selectedChipBg: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.16)
 
@@ -128,13 +117,12 @@ Item {
   }
 
   function targetWordCount() {
-    // Time mode only ever needs enough to fill the rolling window —
-    // ensureBuffer() tops it up as the test progresses.
+    // Time mode just needs to fill the rolling window; ensureBuffer() tops
+    // it up as the run progresses.
     return root.testMode === "time" ? root.wordsAheadBuffer : root.wordsOption
   }
 
-  // Shared by newTest() and restartSame() — everything about a run except
-  // which words are in it.
+  // Everything about a run except which words are in it.
   function resetRunState() {
     testTimer.stop()
     root.phase = "idle"
@@ -158,9 +146,8 @@ Item {
     root.resetRunState()
   }
 
-  // Retypes the exact same words as the run just finished (or the one in
-  // progress), instead of generating a fresh random set — useful for
-  // comparing your speed on identical text.
+  // Retypes the same words instead of drawing a fresh set, for comparing
+  // runs over identical text.
   function restartSame() {
     if (root.originalWords.length === 0) { root.newTest(); return }
     root.words = root.originalWords.slice()
@@ -185,56 +172,49 @@ Item {
     if (root.testMode === "words") root.newTest()
   }
 
-  // Keyboard-only config, mirroring the chip clicks: Up/Down swap the mode
-  // tab, Left/Right step the option within it. Arrow keys are otherwise
-  // unused here, so nothing is stolen from the typing itself. The setters
-  // above already no-op mid-run, so no need to guard phase here too.
+  // Arrow-key config, mirroring the chips. The setters above already no-op
+  // mid-run, so there's no phase guard here.
   function cycleMode() {
     root.setMode(root.testMode === "time" ? "words" : "time")
   }
 
   function cycleOption(direction) {
-    if (root.testMode === "time") {
-      var i = root.timeOptions.indexOf(root.timeOption)
-      root.setTimeOption(root.timeOptions[(i + direction + root.timeOptions.length) % root.timeOptions.length])
-    } else {
-      var j = root.wordsOptions.indexOf(root.wordsOption)
-      root.setWordsOption(root.wordsOptions[(j + direction + root.wordsOptions.length) % root.wordsOptions.length])
-    }
+    var timed = root.testMode === "time"
+    var options = timed ? root.timeOptions : root.wordsOptions
+    var index = options.indexOf(timed ? root.timeOption : root.wordsOption)
+    var next = options[(index + direction + options.length) % options.length]
+
+    if (timed) root.setTimeOption(next)
+    else root.setWordsOption(next)
   }
 
-  // MonkeyType never keeps an unbounded word list mounted: top up ahead of
-  // the cursor so the renderer never runs dry.
+  // Keeps a bounded window mounted: top up ahead of the cursor so the
+  // renderer never runs dry.
   readonly property int wordsAheadBuffer: 40
 
   function ensureBuffer() {
     if (root.testMode !== "time") return
-    if (root.words.length - root.currentWordIndex < root.wordsAheadBuffer) {
-      var extra = TypingTestModel.pickWords(root.wordPool, 60)
-      root.words = root.words.concat(extra)
-      // Keep in sync so restartSame() can still replay a run that ran long
-      // enough to need topping up.
-      root.originalWords = root.originalWords.concat(extra)
-    }
+    if (root.words.length - root.currentWordIndex >= root.wordsAheadBuffer) return
+
+    var extra = TypingTestModel.pickWords(root.wordPool, 60)
+    root.words = root.words.concat(extra)
+    // Kept in sync so restartSame() can replay a run long enough to top up.
+    root.originalWords = root.originalWords.concat(extra)
   }
 
-  // Drops the top rendered line as a single batch once the cursor has
-  // moved two lines past it — trimming word-by-word (the original
-  // approach) reflowed the whole word stream on every single word once the
-  // buffer filled, which read as words constantly jittering away
-  // mid-typing. Keeping one full trailing line around also gives
-  // backspace-across-word-boundary somewhere to land right after a line
-  // break. Time mode only — words mode's total is fixed and must stay
-  // intact for the X/N progress count and finish check.
+  // Drops the top line in one batch once the cursor is two lines past it.
+  // Trimming word-by-word instead re-wrapped the stream on every submission,
+  // which read as words jittering away mid-typing; holding a trailing line
+  // also gives backspace-across-words somewhere to land after a line break.
+  // Time mode only — words mode's total must stay intact for its X/N count
+  // and finish check.
   function trimCompletedLine() {
     if (root.testMode !== "time") return
-    var lines = wordStream.lines
-    if (lines.length === 0) return
+    if (wordStream.lines.length === 0) return
+    // Below 2 also covers -1 (index past the end).
+    if (wordStream.lineIndexFor(root.currentWordIndex) < 2) return
 
-    var cursorLine = wordStream.lineIndexFor(root.currentWordIndex)
-    if (cursorLine < 2) return // keep at least one trailing line + the current one
-
-    var drop = lines[0].length
+    var drop = wordStream.lines[0].length
     root.words = root.words.slice(drop)
     root.submittedWords = root.submittedWords.slice(drop)
     root.currentWordIndex -= drop
@@ -247,24 +227,22 @@ Item {
     testTimer.start()
   }
 
-  // Caps how far a word can be over-typed with wrong characters — without
-  // this, mashing keys against a word you're stuck on grows `currentInput`
-  // (and the "extra" characters rendered after it) without bound.
+  // Bounds overtyping, so mashing keys at a word can't grow currentInput
+  // (and its rendered extras) without limit.
   readonly property int maxExtraChars: 10
 
   function typeChar(ch) {
     if (root.phase === "done" || root.wordPool.length === 0) return
     root.beginIfIdle()
+
     var target = root.words[root.currentWordIndex] || ""
     if (root.currentInput.length >= target.length + root.maxExtraChars) return
     root.currentInput += ch
   }
 
-  // Un-tallies and steps back into the previous word. Shared by backspace()
-  // (which then restores what was typed there) and backspaceWord() (which
-  // wipes it instead). Returns the word's previously-typed text, or null if
-  // there's no previous word to step into (start of the rolling
-  // buffer/test — see trimCompletedLine()).
+  // Un-tallies the previous word and moves onto it, returning what had been
+  // typed there — or null at the start of the buffer. backspace() restores
+  // that text; backspaceWord() discards it.
   function stepIntoPreviousWord() {
     if (root.currentWordIndex === 0) return null
 
@@ -292,10 +270,9 @@ Item {
     if (typed !== null) root.currentInput = typed
   }
 
-  // Ctrl+Backspace: erases the whole current word's input in one go, like a
-  // text editor's delete-previous-word. At the start of a word (nothing
-  // left to erase there), steps back and erases the previous word entirely
-  // too, rather than restoring it the way plain Backspace does.
+  // Ctrl+Backspace, like a text editor's delete-previous-word. At the start
+  // of a word it steps back and clears the previous one outright, rather
+  // than restoring it the way plain Backspace does.
   function backspaceWord() {
     if (root.phase !== "running") return
 
@@ -329,22 +306,19 @@ Item {
     }
 
     if (root.testMode === "time") {
-      // wordStream.lines is a plain binding off root.words, so it's already
-      // up to date here — no need to wait for a layout pass the way the
-      // old geometry-based version of this did.
+      // wordStream.lines binds off root.words, so it's already current —
+      // no layout pass to wait for.
       root.trimCompletedLine()
     } else {
-      // ensureVisible reads actual rendered row positions, which do need a
-      // tick to settle after the model change above.
+      // ensureVisible reads rendered row positions, which need a tick to
+      // settle after the model change above.
       Qt.callLater(function() { wordStream.ensureVisible(root.currentWordIndex) })
     }
   }
 
-  // Once-a-second raw-WPM samples, feeding the consistency stat — a rough
-  // measure (coefficient of variation, see TypingTestModel.computeConsistency())
-  // of how *even* the typing speed was, not just its average. Sampled off
-  // total characters typed so far, right or wrong and including the
-  // in-progress word, so it tracks cadence rather than accuracy.
+  // Samples raw WPM once per elapsed second. Counts every character typed,
+  // right or wrong, including the in-progress word, so consistency tracks
+  // cadence rather than accuracy.
   function sampleWpm() {
     var currentSecond = Math.floor(root.elapsed)
     if (currentSecond <= root.lastSampleSecond) return
@@ -358,9 +332,8 @@ Item {
   }
 
   function finish() {
-    // Take the last sample before folding the in-progress word's characters
-    // into correctChars/incorrectChars below — sampleWpm() expects those to
-    // still exclude currentInput, same as every tick during the run.
+    // Sample before folding currentInput into the tallies below — sampleWpm()
+    // counts it separately, as it does on every tick during the run.
     root.sampleWpm()
 
     // Score whatever was left mid-word so a time-out doesn't drop it.
@@ -477,11 +450,8 @@ Item {
         }
       }
 
-      // Two independent layouts sharing the same tall card: ConfigBar
-      // stays pinned to the top (it's a toolbar, not part of the "content"
-      // being read), while the actual content — the word stream, or the
-      // results stats — centers itself in the space below it, the same
-      // way ResultsScreen centers its own stats.
+      // ConfigBar pins to the top as a toolbar; the content below it — word
+      // stream or results — centers itself in the rest of the card.
       Item {
         id: contentArea
         anchors.fill: parent
@@ -508,8 +478,10 @@ Item {
           accent: Color.accent
           cornerRadius: root.cornerRadius
           onModeSelected: function(mode) { root.setMode(mode) }
-          onTimeSelected: function(value) { root.setTimeOption(value) }
-          onWordsSelected: function(value) { root.setWordsOption(value) }
+          onOptionSelected: function(value) {
+            if (root.testMode === "time") root.setTimeOption(value)
+            else root.setWordsOption(value)
+          }
         }
 
         Column {
@@ -517,9 +489,8 @@ Item {
           spacing: root.rowSpacing
           visible: root.phase !== "done"
 
-          // Live readout while running. Always occupies its row (opacity,
-          // not visible) so nothing shifts switching between idle and
-          // running.
+          // Live readout. Always occupies its row (opacity, not visible) so
+          // nothing shifts between idle and running.
           Text {
             anchors.horizontalCenter: parent.horizontalCenter
             opacity: root.phase === "running" ? 1 : 0
@@ -546,7 +517,6 @@ Item {
             fontFamily: root.monoFontFamily
             fontSize: root.wordFontSize
             lineSpacing: root.wordLineSpacing
-            wordSpacing: root.wordLineSpacing
             correctColor: root.correctColor
             incorrectColor: root.incorrectColor
             pendingColor: root.pendingColor

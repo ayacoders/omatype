@@ -1,12 +1,10 @@
 import QtQuick
 import qs.Commons
 
-// Mode + duration/word-count chip row, plus a small keybinding legend for
-// it underneath. Purely presentational — it just reflects the state it's
-// given and signals intent back to the parent, which owns setMode()/
-// setTimeOption()/setWordsOption() (and their mid-run no-ops). Every chip
-// here has a keyboard equivalent too (the parent's Up/Down/Left/Right
-// handling) — the legend just makes that discoverable.
+// Mode + option chips with a keybinding legend underneath. Presentational
+// only: it reflects the state it's given and signals intent back to the
+// parent, which owns the setters and their mid-run no-ops. Every chip has a
+// keyboard equivalent (the parent's arrow keys); the legend advertises it.
 Column {
   id: root
 
@@ -26,8 +24,11 @@ Column {
   property int cornerRadius: 0
 
   signal modeSelected(string mode)
-  signal timeSelected(int value)
-  signal wordsSelected(int value)
+  // The parent knows which mode is active, so one signal covers both the
+  // duration and word-count chips.
+  signal optionSelected(int value)
+
+  readonly property bool timed: root.testMode === "time"
 
   spacing: Style.spacing.sm
   opacity: root.running ? 0.35 : 1
@@ -87,31 +88,14 @@ Column {
     Row {
       spacing: Style.spacing.lg
       anchors.verticalCenter: parent.verticalCenter
-      visible: root.testMode === "time"
 
       Repeater {
-        model: root.timeOptions
+        model: root.timed ? root.timeOptions : root.wordsOptions
         delegate: Chip {
           required property int modelData
           label: String(modelData)
-          selected: root.timeOption === modelData
-          onActivated: root.timeSelected(modelData)
-        }
-      }
-    }
-
-    Row {
-      spacing: Style.spacing.lg
-      anchors.verticalCenter: parent.verticalCenter
-      visible: root.testMode === "words"
-
-      Repeater {
-        model: root.wordsOptions
-        delegate: Chip {
-          required property int modelData
-          label: String(modelData)
-          selected: root.wordsOption === modelData
-          onActivated: root.wordsSelected(modelData)
+          selected: modelData === (root.timed ? root.timeOption : root.wordsOption)
+          onActivated: root.optionSelected(modelData)
         }
       }
     }
