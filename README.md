@@ -68,11 +68,12 @@ omarchy plugin remove aya.omatype
 | File | Role |
 | --- | --- |
 | `TypingTest.qml` | All state and test logic; composes the rest |
-| `WordStream.qml` | Line-wrapped, centered word viewport |
-| `WordItem.qml` | One word: character coloring and caret |
+| `WordStream.qml` | Line-wrapped, centered word viewport, and the caret |
+| `WordItem.qml` | One word: per-character coloring |
 | `ConfigBar.qml` | Mode/duration/word-count chips |
 | `ResultsScreen.qml` | End-of-run stats |
-| `TypingTestModel.js` | Pure logic: word picking, line wrapping, scoring |
+| `WpmGraph.qml` | WPM-over-time chart on the results screen |
+| `TypingTestModel.js` | Pure logic: word picking, line wrapping, scoring, graph math |
 
 ## Development
 
