@@ -95,17 +95,58 @@ function computeStats(correctChars, incorrectChars, seconds) {
 function computeConsistency(samples) {
   if (!samples || samples.length < 2) return 100
 
-  var sum = 0
-  for (var i = 0; i < samples.length; i++) sum += samples[i]
-  var mean = sum / samples.length
-  if (mean <= 0) return 100
+  var average = mean(samples)
+  if (average <= 0) return 100
 
   var squaredDiffs = 0
-  for (var j = 0; j < samples.length; j++) {
-    var diff = samples[j] - mean
+  for (var i = 0; i < samples.length; i++) {
+    var diff = samples[i] - average
     squaredDiffs += diff * diff
   }
 
-  var coefficientOfVariation = Math.sqrt(squaredDiffs / samples.length) / mean
+  var coefficientOfVariation = Math.sqrt(squaredDiffs / samples.length) / average
   return Math.max(0, Math.min(100, 100 * (1 - coefficientOfVariation)))
+}
+
+// Arithmetic mean, 0 when there is nothing to average. Shared by the
+// consistency stat and the graph's average line, so the line always sits at
+// the centre of the spread the score is measuring.
+function mean(samples) {
+  if (!samples || samples.length === 0) return 0
+
+  var sum = 0
+  for (var i = 0; i < samples.length; i++) sum += samples[i]
+  return sum / samples.length
+}
+
+// Y-axis ceiling for the WPM graph: the next round number above the peak,
+// always leaving a little headroom so the line never runs flush along the
+// top edge.
+function niceMax(samples) {
+  var peak = 0
+  if (samples) {
+    for (var i = 0; i < samples.length; i++) {
+      if (samples[i] > peak) peak = samples[i]
+    }
+  }
+  if (peak <= 0) return 10
+
+  var step = peak <= 50 ? 10 : 20
+  var max = Math.ceil(peak / step) * step
+  return max === peak ? max + step : max
+}
+
+// Per-second WPM samples projected onto a width x height box, y flipped so
+// 0 wpm sits on the bottom edge. Fewer than two samples can't form a line,
+// so they yield nothing rather than a degenerate point.
+function graphPoints(samples, width, height, maxValue) {
+  if (!samples || samples.length < 2 || maxValue <= 0) return []
+
+  var points = []
+  var step = width / (samples.length - 1)
+  for (var i = 0; i < samples.length; i++) {
+    var value = Math.max(0, Math.min(samples[i], maxValue))
+    points.push({ x: i * step, y: height - (value / maxValue) * height })
+  }
+  return points
 }

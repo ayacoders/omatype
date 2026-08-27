@@ -14,12 +14,14 @@ Item {
   required property int correctChars
   required property int incorrectChars
   required property real time
+  required property var wpmSamples
 
   property string fontFamily: "sans-serif"
   property string monoFontFamily: "monospace"
   property color foreground: "white"
   property color accent: "white"
   property color mutedText: "gray"
+  property color gridColor: "gray"
 
   component Stat: Column {
     id: stat
@@ -56,6 +58,18 @@ Item {
 
       Stat { label: "wpm"; value: Math.round(root.wpm) + ""; valueSize: Style.font.displayLarge * 2; valueColor: root.accent }
       Stat { label: "accuracy"; value: Math.round(root.accuracy) + "%"; valueSize: Style.font.displayLarge * 2 }
+    }
+
+    WpmGraph {
+      width: root.width * 0.72
+      height: Style.space(150)
+      anchors.horizontalCenter: parent.horizontalCenter
+      samples: root.wpmSamples
+      duration: root.time
+      fontFamily: root.monoFontFamily
+      lineColor: root.accent
+      gridColor: root.gridColor
+      mutedText: root.mutedText
     }
 
     Row {

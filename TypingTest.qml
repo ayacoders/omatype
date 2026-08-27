@@ -382,6 +382,11 @@ Item {
     root.resultAccuracy = stats.accuracy
     root.resultConsistency = TypingTestModel.computeConsistency(root.wpmSamples)
     root.resultTime = seconds
+
+    // sampleWpm() pushes in place, which notifies nothing. Reassign so the
+    // graph binding sees the run's samples rather than the empty array it
+    // was handed at reset.
+    root.wpmSamples = root.wpmSamples.slice()
     root.phase = "done"
   }
 
@@ -579,11 +584,13 @@ Item {
           correctChars: root.correctChars
           incorrectChars: root.incorrectChars
           time: root.resultTime
+          wpmSamples: root.wpmSamples
           fontFamily: root.fontFamily
           monoFontFamily: root.monoFontFamily
           foreground: root.foreground
           accent: Color.accent
           mutedText: root.pendingColor
+          gridColor: Border.color
         }
       }
     }
