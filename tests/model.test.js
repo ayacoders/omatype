@@ -2,7 +2,7 @@
 // wrapping, and the consistency stat. qmllint can't check any of this, and
 // it's the part most likely to break silently.
 //
-//   node --test tests/
+//   node --test tests/model.test.js
 //
 // The module is a QML JavaScript resource, so it has no exports. Rather than
 // adding test-only plumbing to it, evaluate the source and hand back its

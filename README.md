@@ -94,6 +94,9 @@ for f in ~/.config/omarchy/plugins/aya.omatype/*.qml; do
   qmllint -I "$OMARCHY_PATH/shell" "$f"
 done
 
+# The pure logic (scoring, line wrapping, graph math) has its own tests.
+node --test tests/model.test.js
+
 omarchy-shell shell summon aya.omatype '{}'
 omarchy-shell shell call aya.omatype setMode words
 omarchy-shell shell hide aya.omatype
