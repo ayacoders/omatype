@@ -450,8 +450,10 @@ Item {
             if (root.phase === "running") root.newTest()
             else root.dismiss()
             event.accepted = true
-          } else if (event.key === Qt.Key_Tab) {
-            if (event.modifiers & Qt.ShiftModifier) root.restartSame()
+          } else if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab) {
+            // Shift+Tab arrives as Key_Backtab, not Key_Tab with a modifier,
+            // so the key code is the reliable signal rather than the flag.
+            if (event.key === Qt.Key_Backtab || (event.modifiers & Qt.ShiftModifier)) root.restartSame()
             else root.newTest()
             event.accepted = true
           } else if (event.key === Qt.Key_Backspace) {
