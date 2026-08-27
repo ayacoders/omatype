@@ -182,22 +182,25 @@ Item {
     root.words = root.words.concat(next)
   }
 
+  // Config changes re-mount the existing sequence rather than drawing a new
+  // one: the window still resizes to the new target, but the text stays put
+  // so two settings can be compared on it. Tab asks for different words.
   function setMode(mode) {
     if (root.phase === "running") return
     root.testMode = mode
-    root.newTest()
+    root.restartSame()
   }
 
   function setTimeOption(value) {
     if (root.phase === "running") return
     root.timeOption = value
-    if (root.testMode === "time") root.newTest()
+    if (root.testMode === "time") root.restartSame()
   }
 
   function setWordsOption(value) {
     if (root.phase === "running") return
     root.wordsOption = value
-    if (root.testMode === "words") root.newTest()
+    if (root.testMode === "words") root.restartSame()
   }
 
   // Arrow-key config, mirroring the chips. The setters above already no-op
