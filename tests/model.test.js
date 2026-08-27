@@ -18,7 +18,8 @@ const model = new Function(`
   ${source}
   return {
     parseWordList, pickWords, tallyWord, computeLines,
-    caretOffset, computeStats, computeConsistency
+    caretOffset, computeStats, computeConsistency,
+    niceMax, graphPoints, mean
   }
 `)()
 
@@ -186,5 +187,75 @@ test("computeConsistency stays within 0-100", () => {
   for (const samples of cases) {
     const value = model.computeConsistency(samples)
     assert.ok(value >= 0 && value <= 100, `${value} out of range for ${samples}`)
+  }
+})
+
+test("niceMax clears the peak with headroom to spare", () => {
+  assert.equal(model.niceMax([38]), 40)
+  assert.equal(model.niceMax([12, 41, 7]), 50)
+})
+
+test("niceMax steps past a peak that already sits on a round number", () => {
+  // Otherwise the line would run flush along the top edge.
+  assert.equal(model.niceMax([40]), 50)
+  assert.equal(model.niceMax([80]), 100)
+})
+
+test("niceMax always lands above every sample", () => {
+  const cases = [[1], [9, 3], [55, 60, 58], [120, 30], [0.5], [99.9]]
+  for (const samples of cases) {
+    const max = model.niceMax(samples)
+    assert.ok(max > Math.max(...samples), `${max} does not clear ${samples}`)
+  }
+})
+
+test("niceMax falls back to a usable axis with nothing to plot", () => {
+  assert.equal(model.niceMax([]), 10)
+  assert.equal(model.niceMax([0, 0]), 10)
+  assert.equal(model.niceMax(null), 10)
+})
+
+test("graphPoints spans the full width", () => {
+  const points = model.graphPoints([10, 20, 30], 100, 50, 50)
+  assert.equal(points.length, 3)
+  assert.equal(points[0].x, 0)
+  assert.equal(points[2].x, 100)
+})
+
+test("graphPoints flips y so zero sits on the bottom edge", () => {
+  const points = model.graphPoints([0, 50], 100, 50, 50)
+  assert.equal(points[0].y, 50) // 0 wpm -> bottom
+  assert.equal(points[1].y, 0)  // peak   -> top
+})
+
+test("graphPoints clamps samples into the plot box", () => {
+  const points = model.graphPoints([-5, 999], 100, 50, 50)
+  for (const { y } of points) {
+    assert.ok(y >= 0 && y <= 50, `${y} escaped the box`)
+  }
+})
+
+test("graphPoints declines to draw a line it cannot form", () => {
+  assert.deepEqual(model.graphPoints([42], 100, 50, 50), [])
+  assert.deepEqual(model.graphPoints([], 100, 50, 50), [])
+  assert.deepEqual(model.graphPoints(null, 100, 50, 50), [])
+  assert.deepEqual(model.graphPoints([10, 20], 100, 50, 0), [])
+})
+
+test("mean averages the samples", () => {
+  assert.equal(model.mean([10, 20, 30]), 20)
+  assert.equal(model.mean([5]), 5)
+})
+
+test("mean returns 0 rather than NaN when there is nothing to average", () => {
+  assert.equal(model.mean([]), 0)
+  assert.equal(model.mean(null), 0)
+})
+
+test("mean lands inside the range it summarises", () => {
+  const cases = [[1, 100], [40, 41, 39], [0, 0, 9]]
+  for (const samples of cases) {
+    const value = model.mean(samples)
+    assert.ok(value >= Math.min(...samples) && value <= Math.max(...samples))
   }
 })
